@@ -105,15 +105,60 @@ export async function POST(req: NextRequest) {
     }
 
     const call = streamVideo.video.call("default", meetingId);
+    const realtimeModel = process.env.OPENAI_REALTIME_MODEL || undefined;
+
     const realtimeClient = await streamVideo.video.connectOpenAi({
       call,
       openAiApiKey: OPENAI_API_KEY!,
       agentUserId: existingAgent.id,
+      model: realtimeModel,
     });
 
-    realtimeClient.updateSession({
-      instructions: existingAgent.instructions,
-    });
+    const agentName = existingAgent.name;
+    const liveInstructions = `
+      You are ${agentName}, an AI voice assistant inside a live multi-participant meeting.
+      You only participate when you are directly addressed. Specifically:
+      - Listen to the entire conversation and do not respond to statements that are not directed at you.
+      - Speak only when someone calls you by your name (${agentName}) or explicitly asks for your opinion, answer, or help.
+      - Never interrupt people, never answer on someone else's behalf, and never comment on side conversations.
+      - When you do speak, ground your answer in the conversation so far, use earlier context to stay coherent, and answer concisely.
+      - If a request is ambiguous, ask a short clarifying question before answering.
+
+      As your base behavior, keep following these instructions:
+      ${existingAgent.instructions}
+    `;
+
+    type RealtimeSessionUpdate = Parameters<
+      typeof realtimeClient.updateSession
+    >[0];
+
+    const sessionUpdate: RealtimeSessionUpdate = {
+      instructions: liveInstructions,
+    };
+
+    const semanticVadModels = new Set([
+      "gpt-4o-realtime-preview-2025-06-03",
+      "gpt-realtime",
+      "gpt-realtime-mini",
+    ]);
+
+    const turnDetection = process.env.REALTIME_TURN_DETECTION;
+    const supportsSemanticVad =
+      realtimeModel !== undefined && semanticVadModels.has(realtimeModel);
+
+    if (turnDetection === "semantic_vad" && supportsSemanticVad) {
+      (
+        sessionUpdate as RealtimeSessionUpdate & {
+          turn_detection: { type: "semantic_vad" };
+        }
+      ).turn_detection = { type: "semantic_vad" };
+    } else if (turnDetection === "semantic_vad") {
+      console.warn(
+        `Semantic VAD requested for unsupported realtime model "${realtimeModel ?? "(default)"}", falling back to instructions-only wake-word gating`
+      );
+    }
+
+    realtimeClient.updateSession(sessionUpdate);
   } else if (eventType === "call.session_participant_left") {
     const event = payload as CallSessionParticipantLeftEvent;
     const meetingId = event.call_cid.split(":")[1];
