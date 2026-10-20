@@ -4,12 +4,12 @@ import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { polar, checkout, portal } from "@polar-sh/better-auth";
 
-import { polarClient } from "./polar";
+import { polarCoreClient } from "./polar";
 
 export const auth = betterAuth({
   plugins: [
     polar({
-      client: polarClient,
+      client: polarCoreClient,
       createCustomerOnSignUp: true,
       use: [
         checkout({
