@@ -19,8 +19,10 @@ const summarizer = createAgent({
 });
 
 export const meetingsProcessing = inngest.createFunction(
-  { id: "meetings/processing" },
-  { event: "meetings/processing" },
+  {
+    id: "meetings/processing",
+    triggers: { event: "meetings/processing" },
+  },
   async ({ event, step }) => {
     const response = await step.run("fetch-transcript", async () => {
       return fetch(event.data.transcriptUrl).then((res) => res.text());
