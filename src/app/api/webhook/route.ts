@@ -8,7 +8,6 @@ import { getInstructions } from "@/lib/utils";
 import {
   CallEndedEvent,
   CallRecordingReadyEvent,
-  CallSessionParticipantLeftEvent,
   CallSessionStartedEvent,
   CallTranscriptionReadyEvent,
   MessageNewEvent,
@@ -136,39 +135,33 @@ export async function POST(req: NextRequest) {
       instructions: liveInstructions,
     };
 
-    const semanticVadModels = new Set([
-      "gpt-4o-realtime-preview-2025-06-03",
-      "gpt-realtime",
-      "gpt-realtime-mini",
-    ]);
+    const configuredTurnDetection =
+      process.env.REALTIME_TURN_DETECTION;
 
-    const turnDetection = process.env.REALTIME_TURN_DETECTION;
-    const supportsSemanticVad =
-      realtimeModel !== undefined && semanticVadModels.has(realtimeModel);
+    const turnDetection =
+      configuredTurnDetection === "semantic_vad" ||
+      configuredTurnDetection === "server_vad"
+        ? configuredTurnDetection
+        : "server_vad";
 
-    if (turnDetection === "semantic_vad" && supportsSemanticVad) {
-      (
-        sessionUpdate as RealtimeSessionUpdate & {
-          turn_detection: { type: "semantic_vad" };
-        }
-      ).turn_detection = { type: "semantic_vad" };
-    } else if (turnDetection === "semantic_vad") {
-      console.warn(
-        `Semantic VAD requested for unsupported realtime model "${realtimeModel ?? "(default)"}", falling back to instructions-only wake-word gating`
-      );
-    }
+    (
+      sessionUpdate as RealtimeSessionUpdate & {
+        turn_detection: {
+          type: "semantic_vad" | "server_vad";
+        };
+      }
+    ).turn_detection = { type: turnDetection };
 
-    realtimeClient.updateSession(sessionUpdate);
-  } else if (eventType === "call.session_participant_left") {
-    const event = payload as CallSessionParticipantLeftEvent;
-    const meetingId = event.call_cid.split(":")[1];
+    console.info("[Meeting Agent] Updating realtime session", {
+      meetingId,
+      turnDetection,
+    });
 
-    if (!meetingId) {
-      return NextResponse.json({ error: "Missing meetingId" }, { status: 400 });
-    }
+    await realtimeClient.updateSession(sessionUpdate);
 
-    const call = streamVideo.video.call("default", meetingId);
-    await call.end();
+    console.info("[Meeting Agent] Realtime session updated", {
+      meetingId,
+    });
   } else if (eventType === "call.session_ended") {
     const event = payload as CallEndedEvent;
     const meetingId = event.call.custom?.meetingId;
