@@ -41,9 +41,9 @@ export const protectedProcedure = baseProcedure.use(async ({ ctx, next }) => {
 });
 export const premiumProcedure = (entity: "meetings" | "agents") =>
   protectedProcedure.use(async ({ ctx, next }) => {
-    const customer = await polarClient.customers.getStateExternal({
-      externalId: ctx.auth.user.id
-    })
+    const customer = await polarClient.customers.getStateExternal(
+      ctx.auth.user.id
+    )
 
     const [userMeetings] = await db.select({
       count: count(meetings.id)
@@ -53,7 +53,7 @@ export const premiumProcedure = (entity: "meetings" | "agents") =>
       count: count(agents.id)
     }).from(agents).where(eq(agents.userId, ctx.auth.user.id));
 
-    const isPremium = customer.activeSubscriptions.length > 0;
+    const isPremium = customer.active_subscriptions.length > 0;
     const isFreeAgentLimitReached = userAgents.count >= MAX_FREE_AGENTS;
     const isFreeMeetingLimitReached = userMeetings.count >= MAX_FREE_MEETINGS;
 
