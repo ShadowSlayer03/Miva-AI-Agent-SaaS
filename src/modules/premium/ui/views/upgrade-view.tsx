@@ -39,13 +39,17 @@ const UpgradeView = () => {
                             onClick = () => authClient.customer.portal();
                         }
 
+                        const firstPrice = product.prices[0];
+                        const recurringInterval = product.recurring_interval ?? "recurring";
+                        const priceAmount = firstPrice.amount_type === "fixed" ? firstPrice.price_amount / 100 : 0;
+
                         return (
                             <PricingCard key={product.id} buttonText={buttonText} onClick={onClick} variant={
                                 product.metadata.variant === "highlighted" ? "highlighted" : "default"}
                                 title={product.name}
                                 description={product.description || ""}
-                                priceSuffix={`/${product.prices[0].recurringInterval}`}
-                                price={product.prices[0].amountType === "fixed" ? product.prices[0].priceAmount / 100 : 0}
+                                priceSuffix={`/${recurringInterval}`}
+                                price={priceAmount}
                                 features={product.benefits.map((benefit) => benefit.description)}
                             />
                         )
