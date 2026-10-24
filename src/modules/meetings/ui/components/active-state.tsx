@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { VideoIcon } from "lucide-react";
 import Link from "next/link";
 import React from "react";
+import CopyInviteLinkButton from "./copy-invite-link-button";
 
 type Props = {
   meetingId: string;
@@ -17,6 +18,7 @@ const ActiveState = ({ meetingId }: Props) => {
         description="Meeting will end once all participants have left"
       />
       <div className="flex flex-col-reverse lg:flex-row lg:justify-center items-center gap-2 w-full">
+        <CopyInviteLinkButton meetingId={meetingId} />
         <Button asChild className="w-full lg:w-auto">
           <Link href={`/call/${meetingId}`}>
             <VideoIcon />
