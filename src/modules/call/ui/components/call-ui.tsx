@@ -26,11 +26,11 @@ const CallUI = ({ meetingName }: Props) => {
     }
   };
 
-  const handleLeave = () => {
+  const handleLeave = async () => {
     if (!call) return;
 
     try {
-      call.endCall();
+      await call.leave();
       setShow("ended");
     } catch (error) {
       console.error("Failed to end call:", error);
