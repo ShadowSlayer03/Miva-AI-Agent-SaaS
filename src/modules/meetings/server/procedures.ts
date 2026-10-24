@@ -245,6 +245,28 @@ export const meetingsRouter = createTRPCRouter({
 
       return createdMeeting;
     }),
+  getForCall: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      const [existingMeeting] = await db
+        .select({
+          id: meetings.id,
+          name: meetings.name,
+          status: meetings.status,
+          agentId: meetings.agentId,
+        })
+        .from(meetings)
+        .innerJoin(agents, eq(meetings.agentId, agents.id))
+        .where(eq(meetings.id, input.id));
+
+      if (!existingMeeting)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Meeting Not Found!",
+        });
+
+      return existingMeeting;
+    }),
   getOne: protectedProcedure
   .input(z.object({ id: z.string() }))
   .query(async ({ input, ctx }) => {
