@@ -8,42 +8,40 @@ import { count, eq } from "drizzle-orm";
 
 export const premiumRouter = createTRPCRouter({
     getCurrentSubscription: protectedProcedure.query(async({ctx})=>{
-        const customer = await polarClient.customers.getStateExternal({
-            externalId: ctx.auth.user.id
-        })
+        const customer = await polarClient.customers.getStateExternal(
+            ctx.auth.user.id
+        )
 
-        const subscription = customer.activeSubscriptions?.[0];
+        const subscription = customer.active_subscriptions?.[0];
 
         if(!subscription) return null;
 
-        const product = await polarClient.products.get({
-            id: subscription.productId
-        })
+        const product = await polarClient.products.get(
+            subscription.product_id
+        )
 
         return product;
     }),
     getProducts: protectedProcedure.query(async () => {
         const products = await polarClient.products.list({
-            isArchived: false,
-            isRecurring: true,
+            is_archived: false,
+            is_recurring: true,
             sorting: ["price_amount"]
         })
 
-        return products.result.items;
+        return products.items;
     }),
     getFreeUsage: protectedProcedure.query(async ({ ctx }) => {
         try {
             try {
-                await polarClient.customers.getStateExternal({
-                    externalId: ctx.auth.user.id
-                });
+                await polarClient.customers.getStateExternal(ctx.auth.user.id);
             } catch (err: any) {
                 if (err?.error === "ResourceNotFound") {
                     // Automatically create a Polar customer for free tier users
                     await polarClient.customers.create({
-                        externalId: ctx.auth.user.id,
+                        external_id: ctx.auth.user.id,
                         name: ctx.auth.user.name ?? "User",
-                        email: ctx.auth.user.email ?? undefined,
+                        email: ctx.auth.user.email ?? "user@example.com",
                     });
                 } else {
                     throw err;
