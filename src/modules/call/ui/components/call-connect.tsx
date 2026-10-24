@@ -68,9 +68,9 @@ const CallConnect = ({
 
     return () => {
       if (_call.state.callingState !== CallingState.LEFT) {
-        _call.leave();
-        _call.endCall();
-        setCall(undefined);
+        void _call.leave().catch((error) => {
+          console.error("Failed to leave call during cleanup:", error);
+        });
       }
     };
   }, [client, meetingId]);
