@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -14,12 +16,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   ChevronRightIcon,
+  Link2Icon,
   MoreVerticalIcon,
   PencilIcon,
   TrashIcon,
 } from "lucide-react";
 import Link from "next/link";
 import React from "react";
+import { toast } from "sonner";
 
 type Props = {
   meetingId: string;
@@ -29,6 +33,17 @@ type Props = {
 };
 
 const MeetingIdViewHeader = ({ meetingId, meetingName, onEdit, onRemove }: Props) => {
+  const handleCopyInviteLink = async () => {
+    const url = `${window.location.origin}/call/${meetingId}`;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Invite link copied to clipboard");
+    } catch {
+      toast.error("Failed to copy invite link");
+    }
+  };
+
   return (
     <div className="flex items-center justify-between">
       <Breadcrumb>
@@ -61,6 +76,10 @@ const MeetingIdViewHeader = ({ meetingId, meetingName, onEdit, onRemove }: Props
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={handleCopyInviteLink}>
+            <Link2Icon className="size-4 text-black" />
+            Copy Invite Link
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={onEdit}>
             <PencilIcon className="size-4 text-black" />
             Edit
