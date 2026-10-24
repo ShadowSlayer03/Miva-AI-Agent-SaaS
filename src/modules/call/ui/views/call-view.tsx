@@ -14,7 +14,7 @@ const CallView = ({ meetingId }: Props) => {
   const trpc = useTRPC();
 
   const { data } = useSuspenseQuery(
-    trpc.meetings.getOne.queryOptions({ id: meetingId })
+    trpc.meetings.getForCall.queryOptions({ id: meetingId })
   );
 
   if (data.status === "completed") {
