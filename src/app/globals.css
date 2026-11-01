@@ -144,3 +144,49 @@ body {
 .font-heading {
   font-family: var(--font-heading);
 }
+
+/* AI agent presentation stage: the agent's video track carries whole slides,
+   so never crop or mirror it. */
+.miva-stage video {
+  object-fit: contain;
+  background: #000;
+}
+
+/* Call lobby: the SDK's video preview is a fixed 500x375 box; let it fit the
+   card instead of overflowing it on narrow screens. */
+.miva-lobby .str-video__video-preview-container {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+}
+
+/* Meeting chat panel: fill the column and re-point Stream Chat's dark theme at
+   the Miva green/near-black palette. */.miva-chat .str-chat__container,
+.miva-chat .str-chat__channel {
+  height: 100%;
+}
+
+.miva-chat .str-chat__theme-dark {
+  --str-chat__primary-color: #17cf97;
+  --str-chat__primary-color-low-emphasis: rgba(23, 207, 151, 0.22);
+  --str-chat__primary-surface-color: rgba(23, 207, 151, 0.14);
+  --str-chat__primary-surface-color-low-emphasis: rgba(23, 207, 151, 0.08);
+  --str-chat__active-primary-color: #13b586;
+  --str-chat__on-primary-color: #04140f;
+  --str-chat__background-color: #101213;
+  --str-chat__secondary-background-color: #0a0e0d;
+  --str-chat__surface-color: #22302c;
+  --str-chat__secondary-surface-color: #17201d;
+  --str-chat__tertiary-surface-color: #141b19;
+  --str-chat__text-color: #eaf2ef;
+  --str-chat__text-low-emphasis-color: #8ca09a;
+}
+
+.miva-chat .str-chat__main-panel {
+  height: 100%;
+  padding: 0;
+}
+
+.miva-chat .str-chat__message-list {
+  padding: 12px 0;
+}
