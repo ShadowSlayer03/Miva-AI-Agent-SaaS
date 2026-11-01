@@ -8,6 +8,7 @@ import { getInstructions } from "@/lib/utils";
 import {
   CallEndedEvent,
   CallRecordingReadyEvent,
+  CallSessionParticipantLeftEvent,
   CallSessionStartedEvent,
   CallTranscriptionReadyEvent,
   MessageNewEvent,
@@ -26,8 +27,33 @@ if (!OPENAI_API_KEY) {
 
 const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+const VISION_AGENT_URL =
+  process.env.VISION_AGENT_URL ?? "http://127.0.0.1:8000";
+
 function verifySignatureWithSDK(body: string, signature: string): boolean {
   return streamVideo.verifyWebhook(body, signature);
+}
+
+
+async function stopVisionAgent(meetingId: string) {
+  try {
+    const response = await fetch(
+      `${VISION_AGENT_URL}/agent/${encodeURIComponent(meetingId)}`,
+      { method: "DELETE" }
+    );
+
+    if (!response.ok) {
+      console.error("[Meeting Agent] Failed to stop vision agent", {
+        meetingId,
+        status: response.status,
+      });
+    }
+  } catch (error) {
+    console.error("[Meeting Agent] Vision agent stop request failed", {
+      meetingId,
+      error,
+    });
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -103,65 +129,110 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Agent not found!" }, { status: 404 });
     }
 
-    const call = streamVideo.video.call("default", meetingId);
-    const realtimeModel = process.env.OPENAI_REALTIME_MODEL || undefined;
+    try {
+      const response = await fetch(`${VISION_AGENT_URL}/agent/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meeting_id: existingMeeting.id,
+          agent_id: existingAgent.id,
+          agent_name: existingAgent.name,
+          instructions: existingAgent.instructions,
+        }),
+      });
 
-    const realtimeClient = await streamVideo.video.connectOpenAi({
-      call,
-      openAiApiKey: OPENAI_API_KEY!,
-      agentUserId: existingAgent.id,
-      model: realtimeModel,
-    });
-
-    const agentName = existingAgent.name;
-    const liveInstructions = `
-      You are ${agentName}, an AI voice assistant inside a live multi-participant meeting.
-      You only participate when you are directly addressed. Specifically:
-      - Listen to the entire conversation and do not respond to statements that are not directed at you.
-      - Speak only when someone calls you by your name (${agentName}) or explicitly asks for your opinion, answer, or help.
-      - Never interrupt people, never answer on someone else's behalf, and never comment on side conversations.
-      - When you do speak, ground your answer in the conversation so far, use earlier context to stay coherent, and answer concisely.
-      - If a request is ambiguous, ask a short clarifying question before answering.
-
-      As your base behavior, keep following these instructions:
-      ${existingAgent.instructions}
-    `;
-
-    type RealtimeSessionUpdate = Parameters<
-      typeof realtimeClient.updateSession
-    >[0];
-
-    const sessionUpdate: RealtimeSessionUpdate = {
-      instructions: liveInstructions,
-    };
-
-    const configuredTurnDetection =
-      process.env.REALTIME_TURN_DETECTION;
-
-    const turnDetection =
-      configuredTurnDetection === "semantic_vad" ||
-      configuredTurnDetection === "server_vad"
-        ? configuredTurnDetection
-        : "server_vad";
-
-    (
-      sessionUpdate as RealtimeSessionUpdate & {
-        turn_detection: {
-          type: "semantic_vad" | "server_vad";
-        };
+      if (!response.ok) {
+        const detail = await response.text();
+        console.error("[Meeting Agent] Failed to start vision agent", {
+          meetingId,
+          status: response.status,
+          detail,
+        });
+      } else {
+        console.info("[Meeting Agent] Vision agent dispatched", {
+          meetingId,
+          agentId: existingAgent.id,
+        });
       }
-    ).turn_detection = { type: turnDetection };
+    } catch (error) {
+      // Do not fail the webhook: Stream would retry and create duplicate
+      // sessions. The meeting simply proceeds without the AI participant.
+      console.error("[Meeting Agent] Vision agent service unreachable", {
+        meetingId,
+        error,
+      });
+    }
+  } else if (eventType === "call.session_participant_left") {
+    const event = payload as CallSessionParticipantLeftEvent;
+    const meetingId = event.call_cid.split(":")[1];
+    const leftUserId = event.participant?.user?.id;
 
-    console.info("[Meeting Agent] Updating realtime session", {
-      meetingId,
-      turnDetection,
-    });
+    const [existingMeeting] = await db
+      .select({
+        id: meetings.id,
+        userId: meetings.userId,
+        agentId: meetings.agentId,
+        status: meetings.status,
+      })
+      .from(meetings)
+      .where(eq(meetings.id, meetingId));
 
-    await realtimeClient.updateSession(sessionUpdate);
+    if (!existingMeeting || !leftUserId) {
+      return NextResponse.json({ status: "ignored" });
+    }
 
-    console.info("[Meeting Agent] Realtime session updated", {
-      meetingId,
-    });
+    // The AI agent is a participant as well. Its departure must never end the
+    // human meeting — this was the bug in the old connectOpenAi handler.
+    if (leftUserId === existingMeeting.agentId) {
+      return NextResponse.json({ status: "ignored" });
+    }
+
+    // Only the meeting owner can close the meeting.
+    const ownerLeft =
+      leftUserId === existingMeeting.userId &&
+      (existingMeeting.status === "active" ||
+        existingMeeting.status === "upcoming");
+
+    if (!ownerLeft) {
+      return NextResponse.json({ status: "ignored" });
+    }
+
+    // Do NOT end the call here just because the owner left. A page reload, a
+    // Fast Refresh remount, a sleeping laptop or a dropped connection all
+    // arrive as the same event, and ending the call made the meeting die (and
+    // the SFU answer "call not found") moments after it had started.
+    //
+    // The vision agent is the participant that keeps the call alive, and it
+    // closes itself once it has been alone for AGENT_IDLE_TIMEOUT_SECONDS.
+    // When the last participant leaves, Stream ends the call by itself and
+    // `call.session_ended` moves the meeting to "processing". That gives the
+    // owner a grace period to rejoin instead of killing the meeting.
+    const call = streamVideo.video.call("default", meetingId);
+
+    try {
+      const response = await call.get();
+      const participantIds =
+        response.call.session?.participants.map(
+          (participant) => participant.user.id
+        ) ?? [];
+
+      console.info("[Meeting Agent] Owner left the call", {
+        meetingId,
+        agentInCall: participantIds.includes(existingMeeting.agentId),
+        othersInCall: participantIds.filter(
+          (id) =>
+            id !== existingMeeting.agentId && id !== existingMeeting.userId
+        ).length,
+      });
+    } catch (error) {
+      console.info("[Meeting Agent] Call already ended", {
+        meetingId,
+        error: error instanceof Error ? error.message : error,
+      });
+      return NextResponse.json({ status: "call-already-ended" });
+    }
+
+    return NextResponse.json({ status: "kept-open" });
   } else if (eventType === "call.session_ended") {
     const event = payload as CallEndedEvent;
     const meetingId = event.call.custom?.meetingId;
@@ -174,6 +245,8 @@ export async function POST(req: NextRequest) {
       .update(meetings)
       .set({ status: "processing", endedAt: new Date() })
       .where(and(eq(meetings.id, meetingId), eq(meetings.status, "active")));
+
+    await stopVisionAgent(meetingId);
   } else if (eventType === "call.transcription_ready") {
     const event = payload as CallTranscriptionReadyEvent;
     const meetingId = event.call_cid.split(":")[1];
