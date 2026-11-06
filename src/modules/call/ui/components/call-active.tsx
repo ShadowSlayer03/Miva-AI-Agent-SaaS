@@ -7,14 +7,29 @@ import {
   useCall,
   useCallStateHooks,
 } from "@stream-io/video-react-sdk";
+import { Loader2Icon, PhoneOffIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type Props = {
   onLeave: () => void;
   meetingName: string;
   agentId?: string;
+  /** Present only for the meeting owner. */
+  onEndForAll?: () => void;
+  isEnding?: boolean;
 };
 
 type SlideEvent = {
@@ -23,7 +38,13 @@ type SlideEvent = {
   title?: string;
 };
 
-const CallActive = ({ onLeave, meetingName, agentId }: Props) => {
+const CallActive = ({
+  onLeave,
+  meetingName,
+  agentId,
+  onEndForAll,
+  isEnding,
+}: Props) => {
   const call = useCall();
   const { useParticipants } = useCallStateHooks();
   const participants = useParticipants();
@@ -71,6 +92,43 @@ const CallActive = ({ onLeave, meetingName, agentId }: Props) => {
             />
             {slideTitle ? `Presenting: ${slideTitle}` : "Live"}
           </span>
+
+          {onEndForAll && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  type="button"
+                  disabled={isEnding}
+                  className="flex items-center gap-2 rounded-full bg-red-500/15 px-3 py-1.5 text-red-400 transition-colors hover:bg-red-500/25 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isEnding ? (
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                  ) : (
+                    <PhoneOffIcon className="size-3.5" />
+                  )}
+                  End meeting
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>End meeting for everyone?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    All participants will be disconnected and the AI agent will
+                    stop. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={onEndForAll}
+                    className="bg-red-600 text-white hover:bg-red-700"
+                  >
+                    End meeting
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
