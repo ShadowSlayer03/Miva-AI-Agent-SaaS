@@ -16,9 +16,11 @@ import generateAvatarURI from "@/lib/avatar";
 import { Button } from "@/components/ui/button";
 import { LogInIcon } from "lucide-react";
 import Link from "next/link";
+import CallBackdrop from "./call-backdrop";
 
 type Props = {
   onJoin: () => void;
+  error?: string | null;
 };
 
 const DisabledVideoPreview = () => {
@@ -43,13 +45,13 @@ const DisabledVideoPreview = () => {
 
 const AllowBrowserPermissions = () => {
   return (
-    <p className="text-sm">
+    <p className="max-w-xs px-6 text-center text-sm text-muted-foreground">
       Please grant your browser permission to access your camera and microphone.
     </p>
   );
 };
 
-const CallLobby = ({ onJoin }: Props) => {
+const CallLobby = ({ onJoin, error }: Props) => {
   const { useCameraState, useMicrophoneState } = useCallStateHooks();
 
   const { hasBrowserPermission: hasMicPermission } = useMicrophoneState();
@@ -66,13 +68,15 @@ const CallLobby = ({ onJoin }: Props) => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-full bg-radial from-sidebar-accent to-sidebar">
-      <div className="py-4 px-8 flex-1 items-center justify-center">
-        <div className="flex flex-col items-center justify-center gap-y-6 bg-background rounded-lg p-10 shadow-sm">
-          <div className="flex flex-col gap-y-2 text-center">
-            <h6 className="text-lg font-medium">Ready to join?</h6>
-            <p className="text-sm">Set up your call before joining</p>
-          </div>
+    <CallBackdrop>
+      <div className="flex w-full max-w-xl flex-col items-center justify-center gap-y-6 rounded-lg bg-background p-10 text-foreground shadow-sm">
+        <div className="flex flex-col gap-y-2 text-center">
+          <h6 className="text-lg font-medium">Ready to join?</h6>
+          <p className="text-sm text-muted-foreground">
+            Set up your call before joining
+          </p>
+        </div>
+        <div className="miva-lobby w-full">
           <VideoPreview
             DisabledVideoPreview={
               hasBrowserMediaPermission
@@ -80,22 +84,25 @@ const CallLobby = ({ onJoin }: Props) => {
                 : AllowBrowserPermissions
             }
           />
-          <div className="flex gap-x-2">
-            <ToggleAudioPreviewButton />
-            <ToggleVideoPreviewButton />
-          </div>
-          <div className="flex gap-x-2 justify-between w-full">
-            <Button asChild variant="ghost">
-              <Link href="/meetings">Cancel</Link>
-            </Button>
-            <Button disabled={loading} onClick={handleClickOnJoin}>
-              <LogInIcon />
-              {loading? "Joining..." : "Join Call"}
-            </Button>
-          </div>
+        </div>
+        <div className="flex gap-x-2">
+          <ToggleAudioPreviewButton />
+          <ToggleVideoPreviewButton />
+        </div>
+        {error && (
+          <p className="max-w-sm text-center text-sm text-red-500">{error}</p>
+        )}
+        <div className="flex w-full justify-between gap-x-2">
+          <Button asChild variant="ghost">
+            <Link href="/meetings">Cancel</Link>
+          </Button>
+          <Button disabled={loading} onClick={handleClickOnJoin}>
+            <LogInIcon />
+            {loading ? "Joining..." : "Join Call"}
+          </Button>
         </div>
       </div>
-    </div>
+    </CallBackdrop>
   );
 };
 
