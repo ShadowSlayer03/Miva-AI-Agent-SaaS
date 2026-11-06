@@ -25,6 +25,7 @@ import { streamVideo } from "@/lib/stream-video";
 import generateAvatarURI from "@/lib/avatar";
 import JSONL from "jsonl-parse-stringify";
 import { streamChat } from "@/lib/stream-chat";
+import { stopVisionAgent } from "@/lib/vision-agent";
 
 export const meetingsRouter = createTRPCRouter({
   generateChatToken: protectedProcedure.mutation(async ({ ctx }) => {
@@ -211,6 +212,7 @@ export const meetingsRouter = createTRPCRouter({
             recording: {
               mode: "auto-on",
               quality: "1080p",
+              layout: { name: "spotlight" },
             },
           },
         },
@@ -245,15 +247,59 @@ export const meetingsRouter = createTRPCRouter({
 
       return createdMeeting;
     }),
+  endForAll: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const [existingMeeting] = await db
+        .select({ id: meetings.id, status: meetings.status })
+        .from(meetings)
+        .where(
+          and(eq(meetings.id, input.id), eq(meetings.userId, ctx.auth.user.id))
+        );
+
+      if (!existingMeeting) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Meeting Not Found!",
+        });
+      }
+
+      // Disconnect every participant at once. If the call already ended this
+      // throws, but the meeting state still has to move forward.
+      try {
+        await streamVideo.video.call("default", existingMeeting.id).end();
+      } catch (error) {
+        console.error("[meetings.endForAll] Failed to end call", error);
+      }
+
+      if (
+        existingMeeting.status === "active" ||
+        existingMeeting.status === "upcoming"
+      ) {
+        await db
+          .update(meetings)
+          .set({ status: "processing", endedAt: new Date() })
+          .where(eq(meetings.id, existingMeeting.id));
+      }
+
+      // Normally `call.session_ended` does this. Doing it here as well makes
+      // the button work even when webhook delivery is delayed or broken.
+      await stopVisionAgent(existingMeeting.id);
+
+      return { id: existingMeeting.id };
+    }),
   getForCall: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const [existingMeeting] = await db
         .select({
           id: meetings.id,
           name: meetings.name,
           status: meetings.status,
           agentId: meetings.agentId,
+          userId: meetings.userId,
+          startedAt: meetings.startedAt,
+          endedAt: meetings.endedAt,
         })
         .from(meetings)
         .innerJoin(agents, eq(meetings.agentId, agents.id))
@@ -265,7 +311,19 @@ export const meetingsRouter = createTRPCRouter({
           message: "Meeting Not Found!",
         });
 
-      return existingMeeting;
+
+      const isJoinable =
+        existingMeeting.endedAt === null &&
+        (existingMeeting.status === "upcoming" ||
+          existingMeeting.status === "active");
+
+      const { userId, ...meeting } = existingMeeting;
+
+      return {
+        ...meeting,
+        isJoinable,
+        isOwner: userId === ctx.auth.user.id,
+      };
     }),
   getOne: protectedProcedure
   .input(z.object({ id: z.string() }))
