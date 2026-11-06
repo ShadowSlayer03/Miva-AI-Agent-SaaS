@@ -5,6 +5,7 @@ import generateAvatarURI from "@/lib/avatar";
 import { streamChat } from "@/lib/stream-chat";
 import { streamVideo } from "@/lib/stream-video";
 import { getInstructions } from "@/lib/utils";
+import { stopVisionAgent } from "@/lib/vision-agent";
 import {
   CallEndedEvent,
   CallRecordingReadyEvent,
@@ -32,28 +33,6 @@ const VISION_AGENT_URL =
 
 function verifySignatureWithSDK(body: string, signature: string): boolean {
   return streamVideo.verifyWebhook(body, signature);
-}
-
-
-async function stopVisionAgent(meetingId: string) {
-  try {
-    const response = await fetch(
-      `${VISION_AGENT_URL}/agent/${encodeURIComponent(meetingId)}`,
-      { method: "DELETE" }
-    );
-
-    if (!response.ok) {
-      console.error("[Meeting Agent] Failed to stop vision agent", {
-        meetingId,
-        status: response.status,
-      });
-    }
-  } catch (error) {
-    console.error("[Meeting Agent] Vision agent stop request failed", {
-      meetingId,
-      error,
-    });
-  }
 }
 
 export async function POST(req: NextRequest) {
