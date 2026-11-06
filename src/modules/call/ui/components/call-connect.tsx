@@ -12,12 +12,14 @@ import {
   StreamVideo,
   StreamVideoClient,
 } from "@stream-io/video-react-sdk";
-import { Loader2Icon } from "lucide-react";
+import CallStatus from "./call-status";
 import CallUI from "./call-ui";
 
 type Props = {
   meetingId: string;
   meetingName: string;
+  agentId?: string;
+  isOwner: boolean;
   userId: string;
   userName: string;
   userImage: string;
@@ -26,6 +28,8 @@ type Props = {
 const CallConnect = ({
   meetingId,
   meetingName,
+  agentId,
+  isOwner,
   userId,
   userName,
   userImage,
@@ -51,8 +55,7 @@ const CallConnect = ({
     setClient(_client);
 
     return () => {
-      _client.disconnectUser();
-      setClient(undefined);
+      void _client.disconnectUser();
     };
   }, [userId, userName, userImage, generateToken]);
 
@@ -62,6 +65,7 @@ const CallConnect = ({
     if (!client) return;
 
     const _call = client.call("default", meetingId);
+
     _call.camera.disable();
     _call.microphone.disable();
     setCall(_call);
@@ -69,7 +73,7 @@ const CallConnect = ({
     return () => {
       if (_call.state.callingState !== CallingState.LEFT) {
         void _call.leave().catch((error) => {
-          console.error("Failed to leave call during cleanup:", error);
+          console.error("[CallConnect] Cleanup leave failed", error);
         });
       }
     };
@@ -77,15 +81,22 @@ const CallConnect = ({
 
   if (!client || !call)
     return (
-      <div className="flex h-screen items-center justify-center bg-radial from-sidebar-accent to-sidebar">
-        <Loader2Icon className="size-6 animate-spin text-white" />
-      </div>
+      <CallStatus
+        loading
+        title="Joining the meeting"
+        description="Setting up your connection and video preview."
+      />
     );
 
   return (
     <StreamVideo client={client}>
       <StreamCall call={call}>
-        <CallUI meetingName={meetingName} />
+        <CallUI
+          meetingId={meetingId}
+          meetingName={meetingName}
+          agentId={agentId}
+          isOwner={isOwner}
+        />
       </StreamCall>
     </StreamVideo>
   );
