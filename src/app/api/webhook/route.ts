@@ -5,7 +5,7 @@ import generateAvatarURI from "@/lib/avatar";
 import { streamChat } from "@/lib/stream-chat";
 import { streamVideo } from "@/lib/stream-video";
 import { getInstructions } from "@/lib/utils";
-import { stopVisionAgent } from "@/lib/vision-agent";
+import { startVisionAgent, stopVisionAgent } from "@/lib/vision-agent";
 import {
   CallEndedEvent,
   CallRecordingReadyEvent,
@@ -27,9 +27,6 @@ if (!OPENAI_API_KEY) {
 }
 
 const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-const VISION_AGENT_URL =
-  process.env.VISION_AGENT_URL ?? "http://127.0.0.1:8000";
 
 function verifySignatureWithSDK(body: string, signature: string): boolean {
   return streamVideo.verifyWebhook(body, signature);
@@ -108,39 +105,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Agent not found!" }, { status: 404 });
     }
 
-    try {
-      const response = await fetch(`${VISION_AGENT_URL}/agent/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          meeting_id: existingMeeting.id,
-          agent_id: existingAgent.id,
-          agent_name: existingAgent.name,
-          instructions: existingAgent.instructions,
-        }),
-      });
-
-      if (!response.ok) {
-        const detail = await response.text();
-        console.error("[Meeting Agent] Failed to start vision agent", {
-          meetingId,
-          status: response.status,
-          detail,
-        });
-      } else {
-        console.info("[Meeting Agent] Vision agent dispatched", {
-          meetingId,
-          agentId: existingAgent.id,
-        });
-      }
-    } catch (error) {
-      // Do not fail the webhook: Stream would retry and create duplicate
-      // sessions. The meeting simply proceeds without the AI participant.
-      console.error("[Meeting Agent] Vision agent service unreachable", {
-        meetingId,
-        error,
-      });
-    }
+    await startVisionAgent({
+      meetingId: existingMeeting.id,
+      agentId: existingAgent.id,
+      agentName: existingAgent.name,
+      instructions: existingAgent.instructions,
+    });
   } else if (eventType === "call.session_participant_left") {
     const event = payload as CallSessionParticipantLeftEvent;
     const meetingId = event.call_cid.split(":")[1];
