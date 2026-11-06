@@ -19,9 +19,21 @@ const MeetingsView = () => {
   const [filters, setFilters] = useMeetingsFilters();
 
   const { data } = useSuspenseQuery(
-    trpc.meetings.getMany.queryOptions({
-      ...filters,
-    })
+    trpc.meetings.getMany.queryOptions(
+      {
+        ...filters,
+      },
+      {
+        refetchInterval: (query) => {
+          const hasPendingMeeting = query.state.data?.items?.some(
+            (meeting) =>
+              meeting.status === "active" || meeting.status === "processing"
+          );
+
+          return hasPendingMeeting ? 5000 : false;
+        },
+      }
+    )
   );
 
   return (
