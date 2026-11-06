@@ -1,36 +1,36 @@
 "use client";
 
-import { authClient } from "@/lib/auth-client";
-import { Loader2Icon } from "lucide-react";
 import React from "react";
 import CallConnect from "./call-connect";
-import generateAvatarURI from "@/lib/avatar";
 
 type Props = {
   meetingId: string;
   meetingName: string;
+  agentId?: string;
+  isOwner: boolean;
+  user: {
+    id: string;
+    name: string;
+    image: string;
+  };
 };
 
-const CallProvider = ({ meetingId, meetingName }: Props) => {
-  const { data, isPending } = authClient.useSession();
-
-  if (!data || isPending) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-radial from-sidebar-accent to-sidebar">
-        <Loader2Icon className="size-6 animate-spin text-white" />
-      </div>
-    );
-  }
+const CallProvider = ({
+  meetingId,
+  meetingName,
+  agentId,
+  isOwner,
+  user,
+}: Props) => {
   return (
     <CallConnect
       meetingId={meetingId}
       meetingName={meetingName}
-      userId={data.user.id}
-      userName={data.user.name}
-      userImage={
-        data.user.image ??
-        generateAvatarURI({ seed: data.user.name, variant: "initials" })
-      }
+      agentId={agentId}
+      isOwner={isOwner}
+      userId={user.id}
+      userName={user.name}
+      userImage={user.image}
     />
   );
 };
